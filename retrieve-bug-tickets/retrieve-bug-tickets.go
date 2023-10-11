@@ -1,7 +1,7 @@
 package retrievebugtickets
 
 import (
-	"encoding/json"
+	decodeticket "debug-stats/decode-ticket"
 	"fmt"
 	"io"
 	"net/http"
@@ -9,62 +9,22 @@ import (
 	"time"
 )
 
-type Workflow struct {
-	Description string `json:"description"`
-	EntityType  string `json:"entity_type"`
-	ProjectIds  []int  `json:"project_ids"`
-	States      []struct {
-		Description       string    `json:"description"`
-		EntityType        string    `json:"entity_type"`
-		Verb              string    `json:"verb"`
-		Name              string    `json:"name"`
-		GlobalID          string    `json:"global_id"`
-		NumStories        int       `json:"num_stories"`
-		Type              string    `json:"type"`
-		UpdatedAt         time.Time `json:"updated_at"`
-		ID                int       `json:"id"`
-		NumStoryTemplates int       `json:"num_story_templates"`
-		Position          int       `json:"position"`
-		CreatedAt         time.Time `json:"created_at"`
-	} `json:"states"`
-	Name            string    `json:"name"`
-	UpdatedAt       time.Time `json:"updated_at"`
-	AutoAssignOwner bool      `json:"auto_assign_owner"`
-	ID              int       `json:"id"`
-	TeamID          int       `json:"team_id"`
-	CreatedAt       time.Time `json:"created_at"`
-	DefaultStateID  int       `json:"default_state_id"`
+type TicketDetail struct {
+	ID int
+	CreatedAt time.Time
+	CompletedAt interface{}
 }
 
-func RetrieveWorkflow(workflowId int) Workflow {
-	var workflow Workflow
-
+func RetrieveTickets(url string, year int, firstHalf bool) string {
 	client := &http.Client{}
 
-	url := fmt.Sprintf("https://api.app.shortcut.com/api/v3/workflows/%d", workflowId)
+	queryString := fmt.Sprintf(`type:bug created:%d-07-01..%d-12-31`, year, year)
 
-	workflowReq, _ := http.NewRequest("GET", url, nil)
-	workflowReq.Header.Add("Content-Type", "application/json")
-	workflowReq.Header.Add("Shortcut-Token", "64f9d7a9-57ab-4376-a3fe-ad49d05ff641")
+	if firstHalf {
+		queryString = fmt.Sprintf(`type:bug created:%d-01-01..%d-06-30`, year, year)
+	}
 
-	workflowJson, _ := client.Do(workflowReq)
-	workflowBody, _ := io.ReadAll(workflowJson.Body)
-
-	json.Unmarshal(([]byte(workflowBody)), &workflow)
-
-	return workflow
-}
-
-func RetrieveTickets(url string) string {
-	client := &http.Client{}
-
-	queryString := `type: bug`
-	// queryString := `type: bug, created_at:1900-01-01..2023-07-01`
-	// if completed {
-	// 	queryString += ", completed:1900-01-01..2023-07-01"
-	// }
-
-	requestBody := strings.NewReader(fmt.Sprintf(`{"detail": "slim", "page_size": 1, "query": "%s"}`, queryString))
+	requestBody := strings.NewReader(fmt.Sprintf(`{"detail": "slim", "page_size":25, "query": "%s"}`, queryString))
 	fullUrl := fmt.Sprintf("https://api.app.shortcut.com%s", url)
 	req, err := http.NewRequest("GET", fullUrl, requestBody)
 
@@ -73,7 +33,7 @@ func RetrieveTickets(url string) string {
 	}
 
 	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Shortcut-Token", "64f9d7a9-57ab-4376-a3fe-ad49d05ff641")
+	req.Header.Add("Shortcut-Token", "6526727b-8598-40aa-ae10-41e379fb25fb")
 
 	resp, err := client.Do(req)
 
@@ -87,4 +47,57 @@ func RetrieveTickets(url string) string {
 
 	}
 	return string(body)
+}
+
+func GetTickets() (int, []TicketDetail) {
+	shortcutTickets := decodeticket.Ticket{}
+	tickets := []TicketDetail{}
+
+	totalTickets := 0
+
+	for year := 2015; year <= time.Now().Year(); year++ {
+		for half := 0; half <= 1; half++ {
+			url := "/api/v3/search/stories"
+			shortcutTickets = GetTicket(url, year, half == 0)
+
+			totalTickets += shortcutTickets.Total
+			totalTicketsThisYear := shortcutTickets.Total
+
+			for i := 0; i < len(shortcutTickets.Data); i++ {
+				ticketDetail := TicketDetail{
+					ID: shortcutTickets.Data[i].ID,
+					CreatedAt: shortcutTickets.Data[i].CreatedAt,
+					CompletedAt: shortcutTickets.Data[i].CompletedAt}
+
+				tickets = append(tickets, ticketDetail)
+			}
+
+			ticketsRemaining := totalTicketsThisYear - len(shortcutTickets.Data)
+
+			url = shortcutTickets.Next
+
+			for i := ticketsRemaining; i > 0; i++ {
+				shortcutTickets = GetTicket(url, year, half == 0)
+				for j := 0; j < len(shortcutTickets.Data); j++ {
+					ticketDetail := TicketDetail{
+						ID: shortcutTickets.Data[j].ID,
+						CreatedAt: shortcutTickets.Data[j].CreatedAt,
+						CompletedAt: shortcutTickets.Data[j].CompletedAt}
+		
+					tickets = append(tickets, ticketDetail)
+				}
+				i = len(shortcutTickets.Data) - 1
+				url = shortcutTickets.Next
+			}
+		}
+	}
+
+	return totalTickets, tickets
+}
+
+func GetTicket(url string, year int, firstHalf bool) decodeticket.Ticket {
+	ticketJson := RetrieveTickets(url, year, firstHalf)
+	ticket := decodeticket.DecodeTicket(ticketJson)
+
+	return ticket
 }

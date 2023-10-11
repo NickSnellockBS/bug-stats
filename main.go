@@ -1,45 +1,39 @@
 package main
 
 import (
+	retrievebugtickets "debug-stats/retrieve-bug-tickets"
 	"fmt"
 	"time"
 )
 
-func main1() {
-	completedTickets := GetTickets()
-	totalTickets := completedTickets[0].Total
+func main() {
+	totalTickets, bugTickets := retrievebugtickets.GetTickets()
+	totalTimeToFix := 0.0
 	totalWaitTime := 0.0
+	totalCompleted := 0
+	totalUncompleted := 0
 
-	for j := 0; j < len(completedTickets); j++ {
-		for i:=0; i < len(completedTickets[j].Data); i++ {
-			createdAt := completedTickets[j].Data[i].CreatedAt
-			completedAt := completedTickets[j].Data[i].CompletedAt.(string)
+	today := time.Now()
+
+	for i := 0; i < totalTickets; i++ {
+		createdAt := bugTickets[i].CreatedAt
+		if bugTickets[i].CompletedAt != nil {
+			completedAt := bugTickets[i].CompletedAt.(string)
 			completedAtTime, error := time.Parse(time.RFC3339, completedAt)
 			if error != nil {
 				fmt.Println(error)
 				return
 			}
 			difference := completedAtTime.Sub(createdAt)
+			totalTimeToFix += difference.Hours()/24
+			totalCompleted++
+		} else {
+			difference := today.Sub(createdAt)
 			totalWaitTime += difference.Hours()/24
+			totalUncompleted++
 		}
 	}
 
-	fmt.Printf("Mean time to completion: %d\n", int64(totalWaitTime/float64(totalTickets)))
-
-	outstandingTickets := GetTickets()
-	totalTicketsWaiting := outstandingTickets[0].Total
-	totalWaitTimeWaiting := 0.0
-
-	now := time.Now()
-
-	for j := 0; j < len(outstandingTickets); j++ {
-		for i:=0; i < len(outstandingTickets[j].Data); i++ {
-			createdAt := outstandingTickets[j].Data[i].CreatedAt
-			difference := now.Sub(createdAt)
-			totalWaitTimeWaiting += difference.Hours()/24
-			fmt.Printf("%d %d-%d-%d\n", outstandingTickets[j].Data[i].ID, createdAt.Day(), createdAt.Month(), createdAt.Year())
-		}
-	}
-
-	fmt.Printf("Mean time waiting: %d\n", int64(totalWaitTimeWaiting/float64(totalTicketsWaiting)))
+	fmt.Printf("Total completed: %d Mean time to completion: %d days\n", totalCompleted, int64(totalTimeToFix/float64(totalCompleted)))
+	fmt.Printf("Total uncompleted: %d Mean time waiting: %d days\n", totalUncompleted, int64(totalWaitTime/float64(totalUncompleted)))
 }
