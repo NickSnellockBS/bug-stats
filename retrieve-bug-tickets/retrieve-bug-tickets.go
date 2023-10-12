@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 type TicketDetail struct {
@@ -16,6 +19,11 @@ type TicketDetail struct {
 }
 
 func RetrieveTickets(url string, year int, firstHalf bool) string {
+	err := godotenv.Load()
+	if err != nil {
+		fmt.Println("Error loading .env file")
+	}
+
 	client := &http.Client{}
 
 	queryString := fmt.Sprintf(`type:bug created:%d-07-01..%d-12-31`, year, year)
@@ -29,22 +37,25 @@ func RetrieveTickets(url string, year int, firstHalf bool) string {
 	req, err := http.NewRequest("GET", fullUrl, requestBody)
 
 	if (err != nil) {
-
+		fmt.Println(err)
+		return ""
 	}
 
 	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Shortcut-Token", "6526727b-8598-40aa-ae10-41e379fb25fb")
+	req.Header.Add("Shortcut-Token", os.Getenv("SHORTCUT_TOIKEN"))
 
 	resp, err := client.Do(req)
 
 	if (err != nil) {
-
+		fmt.Println(err)
+		return ""
 	}
 
 	body, err := io.ReadAll(resp.Body)
 
 	if (err != nil) {
-
+		fmt.Println(err)
+		return ""
 	}
 	return string(body)
 }
@@ -62,6 +73,14 @@ func GetTickets() (int, []TicketDetail) {
 
 			totalTickets += shortcutTickets.Total
 			totalTicketsThisYear := shortcutTickets.Total
+
+			if totalTicketsThisYear > 1000 {
+				halfString := "first half of"
+				if half == 1 {
+					halfString = "second half of"
+				}
+				fmt.Printf("More than 1000 tickets (%d) for %s %d\n", totalTicketsThisYear, halfString, year)
+			}
 
 			for i := 0; i < len(shortcutTickets.Data); i++ {
 				ticketDetail := TicketDetail{
