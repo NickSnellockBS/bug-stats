@@ -16,6 +16,9 @@ type TicketDetail struct {
 	ID int
 	CreatedAt time.Time
 	CompletedAt interface{}
+	WorkflowID int
+	WorkflowStateID int
+	AppURL string
 }
 
 func RetrieveTickets(url string, year int, firstHalf bool) string {
@@ -26,10 +29,10 @@ func RetrieveTickets(url string, year int, firstHalf bool) string {
 
 	client := &http.Client{}
 
-	queryString := fmt.Sprintf(`type:bug created:%d-07-01..%d-12-31`, year, year)
+	queryString := fmt.Sprintf(`type:bug !is:archived created:%d-07-01..%d-12-31`, year, year)
 
 	if firstHalf {
-		queryString = fmt.Sprintf(`type:bug created:%d-01-01..%d-06-30`, year, year)
+		queryString = fmt.Sprintf(`type:bug !is:archived created:%d-01-01..%d-06-30`, year, year)
 	}
 
 	requestBody := strings.NewReader(fmt.Sprintf(`{"detail": "slim", "page_size":25, "query": "%s"}`, queryString))
@@ -42,7 +45,7 @@ func RetrieveTickets(url string, year int, firstHalf bool) string {
 	}
 
 	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Shortcut-Token", os.Getenv("SHORTCUT_TOIKEN"))
+	req.Header.Add("Shortcut-Token", os.Getenv("SHORTCUT_TOKEN"))
 
 	resp, err := client.Do(req)
 
@@ -86,7 +89,10 @@ func GetTickets() (int, []TicketDetail) {
 				ticketDetail := TicketDetail{
 					ID: shortcutTickets.Data[i].ID,
 					CreatedAt: shortcutTickets.Data[i].CreatedAt,
-					CompletedAt: shortcutTickets.Data[i].CompletedAt}
+					CompletedAt: shortcutTickets.Data[i].CompletedAt,
+					WorkflowID: shortcutTickets.Data[i].WorkflowID,
+					WorkflowStateID: shortcutTickets.Data[i].WorkflowStateID,
+					AppURL: shortcutTickets.Data[i].AppURL}
 
 				tickets = append(tickets, ticketDetail)
 			}
@@ -101,7 +107,10 @@ func GetTickets() (int, []TicketDetail) {
 					ticketDetail := TicketDetail{
 						ID: shortcutTickets.Data[j].ID,
 						CreatedAt: shortcutTickets.Data[j].CreatedAt,
-						CompletedAt: shortcutTickets.Data[j].CompletedAt}
+						CompletedAt: shortcutTickets.Data[j].CompletedAt,
+						WorkflowID: shortcutTickets.Data[j].WorkflowID,
+						WorkflowStateID: shortcutTickets.Data[j].WorkflowStateID,
+						AppURL: shortcutTickets.Data[j].AppURL}
 		
 					tickets = append(tickets, ticketDetail)
 				}
